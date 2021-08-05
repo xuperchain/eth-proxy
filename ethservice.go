@@ -81,21 +81,39 @@ type EthService interface {
 
 type ethService struct {
 	xchainClient pb.XchainClient
-	eventClient  pb.EventServiceClient
+	//client  xuper-sdk-go client
+	xclient     *xuper.XClient
+	eventClient pb.EventServiceClient
 	//filterClient  pb.EvmFilterClient
 	logger        *zap.SugaredLogger
 	filterMapLock sync.Mutex
 	filterMap     map[uint64]interface{}
 	filterSeq     uint64
+	account       *account.Account
 }
 
-func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) EthService {
+func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) (EthService, error) {
+	client, err := xuper.New("127.0.0.1:37101")
+	if err != nil {
+		panic("new xuper Client error:")
+	}
+	account, err := account.RetrieveAccount("玉 脸 驱 协 介 跨 尔 籍 杆 伏 愈 即", 1)
+	if err != nil {
+		return nil, errors.New("TODO")
+	}
+	contractAccount := "XC1234567890123456@xuper"
+	err = account.SetContractAccount(contractAccount)
+	if err != nil {
+		return nil, err
+	}
 	return &ethService{
 		xchainClient: xchainClient,
 		eventClient:  eventClient,
 		logger:       logger.Named("ethservice"),
 		filterMap:    make(map[uint64]interface{}),
-	}
+		xclient:      client,
+		account:      account,
+	}, nil
 }
 
 //func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) error {
@@ -113,22 +131,7 @@ func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClie
 
 func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error {
 	*reply = "0x0111111"
-	//fmt.Printf("%v\n", args)
-	client, err := xuper.New("127.0.0.1:37101")
-	if err != nil {
-		panic("new xuper Client error:")
-	}
-	//fmt.Println(args.Data)
-	account, err := account.RetrieveAccount("玉 脸 驱 协 介 跨 尔 籍 杆 伏 愈 即", 1)
-	if err != nil {
-		fmt.Printf("retrieveAccount err: %v\n", err)
-		//TODO
-		return errors.New("TODO")
-	}
-	fmt.Printf("retrieveAccount address: %v\n", account.Address)
-	contractAccount := "XC1234567890123456@xuper"
-	err = account.SetContractAccount(contractAccount)
-	//TODO
+
 	method := "SendTransaction"
 	args1 := map[string]string{
 		"from":      args.From,
@@ -139,16 +142,15 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 		"input":     args.Input,
 		"value":     args.Value,
 	}
-	req, err := xuper.NewInvokeContractRequest(account, xuper.Xkernel3Module, "$evm", method, args1)
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Do(req)
+	resp, err := s.xclient.Do(req)
 	if err != nil {
 		return err
 	}
 	if resp.ContractResponse.Status > 400 {
-		//TODO
 		return errors.New("TODO1")
 	}
 	return nil

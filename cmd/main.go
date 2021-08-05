@@ -53,7 +53,10 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	}
 	logger := rawLogger.Named("proxy").Sugar()
 
-	ethService := xuperproxy.NewEthService(xchainClient, eventClient, logger)
+	ethService, err := xuperproxy.NewEthService(xchainClient, eventClient, logger)
+	if err != nil {
+		return err
+	}
 
 	proxy := xuperproxy.NewEthereumProxy(ethService, port)
 
@@ -113,7 +116,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
 
 func initXchainClient(host string) (pb.XchainClient, pb.EventServiceClient, error) {
 	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithMaxMsgSize(64<<20-1))
