@@ -19,4 +19,4 @@ require (
 	google.golang.org/grpc v1.36.0
 )
 
-replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20210304060557-02933899eeb0
+replace github.com/xuperchain/xupercore =>  ../xupercore
