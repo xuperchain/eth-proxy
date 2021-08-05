@@ -129,17 +129,17 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 	contractAccount := "XC1234567890123456@xuper"
 	err = account.SetContractAccount(contractAccount)
 	//TODO
-	method := "proxy"
+	method := "SendTransaction"
 	args1 := map[string]string{
 		"from":      args.From,
 		"to":        args.To,
 		"gas":       args.Gas,
 		"gas_price": args.GasPrice,
 		"nonce":     args.Nonce,
-		"data":      args.Data,
+		"input":     args.Input,
 		"value":     args.Value,
 	}
-	req, err := xuper.NewInvokeContractRequest(account, xuper.Xkernel3Module, "$contract", method, args1)
+	req, err := xuper.NewInvokeContractRequest(account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
 	}
