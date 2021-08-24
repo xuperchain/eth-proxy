@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	encoding "github.com/hyperledger/burrow/encoding/hex"
+	"github.com/hyperledger/burrow/encoding/rlp"
+	"github.com/hyperledger/burrow/rpc"
 	"github.com/xuperchain/xuper-sdk-go/v2/account"
 	"io"
 	mathRand "math/rand"
@@ -163,44 +166,49 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 }
 
 func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error { //todo
-	_ = 0
-	//	txHash := *arg
-	//	if len(txHash) != txHashLength {
-	//		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
-	//	}
-	//	rawTxId, err := hex.DecodeString(txHash[2:])
-	//	if err != nil {
-	//		s.logger.Error(err)
-	//		return fmt.Errorf("invalid transcation hash")
-	//	}
-	//	pbTxStatus := &pb.TxStatus{
-	//		Header: &pb.Header{
-	//			Logid: global.Glogid(),
-	//		},
-	//		Bcname: bcName,
-	//		Txid:   rawTxId,
-	//	}
-	//	receipt, err := s.xchainClient.GetTransactionReceipt(context.TODO(), pbTxStatus)
-	//	if err != nil {
-	//		s.logger.Error(err)
-	//		return fmt.Errorf("get transactionReceipt error")
-	//	}
-	//	if receipt.TxStatus.Status == pb.TransactionStatus_NOEXIST {
-	//		return fmt.Errorf("Transaction Not Exit\n")
-	//	}
-	//	if receipt.TxStatus.Status != pb.TransactionStatus_CONFIRM {
-	//		return fmt.Errorf("Get TransactionReceipt Err\n")
-	//	}
-	//	result := &types.TxReceipt{}
-	//	result.TransactionHash = fmt.Sprintf("%x", receipt.TxStatus.Txid)
+
+	txHash := *arg
+	if len(txHash) != txHashLength {
+		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
+	}
+
+	method := "GetTransactionReceipt"
+	args1 := make(map[string]string)
+	args1["tx_hash"] = txHash[2:]
+
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
+	if err != nil {
+		return err
+	}
+	resp, err := s.xclient.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.ContractResponse.Status > 400 {
+		return errors.New("TODO1")
+	}
+	signedTx := resp.ContractResponse.Body
+
+	data, err := encoding.DecodeToBytes(string(signedTx))
+	if err != nil {
+		return err
+	}
+
+	rawTx := new(rpc.RawTx)
+	err = rlp.Decode(data, rawTx)
+	if err != nil {
+		return err
+	}
+
+	result := &types.TxReceipt{}
 	//	result.BlockHash = fmt.Sprintf("%x", receipt.TxStatus.Tx.Blockid)
 	//	result.BlockNumber = fmt.Sprintf("%d", receipt.BlockNumber)
 	//	//reply.ContractAddress
 	//	logs := parseEvmLog2TyepLogs(receipt.Log)
 	//	result.Logs = logs
-	//	result.From = receipt.TxStatus.Tx.Initiator
-	//	//reply.To
-	//	*reply = *result
+	result.To = string(rawTx.To)
+	result.TransactionHash = txHash
+	*reply = *result
 	return nil
 }
 
