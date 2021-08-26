@@ -11,6 +11,7 @@ import (
 	encoding "github.com/hyperledger/burrow/encoding/hex"
 	"github.com/hyperledger/burrow/encoding/rlp"
 	"github.com/hyperledger/burrow/rpc"
+	"github.com/hyperledger/burrow/txs"
 	"github.com/xuperchain/xuper-sdk-go/v2/account"
 	"io"
 	mathRand "math/rand"
@@ -26,7 +27,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/burrow/crypto"
 
-	// "github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xuperchain/service/pb"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"go.uber.org/zap"
@@ -50,6 +50,8 @@ const (
 
 var FilterMap = make(map[string]*types.Filter)
 var deadline = 5 * time.Minute
+const 	DEFAULT_NET   = 1
+
 
 // EthService is the rpc server implementation. Each function is an
 // implementation of one ethereum json-rpc
@@ -92,7 +94,6 @@ type ethService struct {
 	xclient     *xuper.XClient
 	eventClient pb.EventServiceClient
 	//filterClient  pb.EvmFilterClient
-	logger        *zap.SugaredLogger
 	filterMapLock sync.Mutex
 	filterMap     map[uint64]interface{}
 	filterSeq     uint64
@@ -141,7 +142,7 @@ func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClie
 func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error {
 	*reply = "0x0111111"
 
-	method := "SendTransaction"
+	method := "SendRawTransaction"
 	args1 := map[string]string{
 		"from":      args.From,
 		"to":        args.To,
@@ -151,6 +152,7 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 		"input":     args.Input,
 		"value":     args.Value,
 	}
+
 	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
@@ -166,7 +168,6 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 }
 
 func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error { //todo
-
 	txHash := *arg
 	if len(txHash) != txHashLength {
 		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
@@ -180,15 +181,12 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	if err != nil {
 		return err
 	}
-	resp, err := s.xclient.Do(req)
+	resp, err := s.xclient.PreExecTx(req)
 	if err != nil {
 		return err
 	}
-	if resp.ContractResponse.Status > 400 {
-		return errors.New("TODO1")
-	}
-	signedTx := resp.ContractResponse.Body
 
+	signedTx := resp.ContractResponse.Body
 	data, err := encoding.DecodeToBytes(string(signedTx))
 	if err != nil {
 		return err
@@ -206,6 +204,20 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	//	//reply.ContractAddress
 	//	logs := parseEvmLog2TyepLogs(receipt.Log)
 	//	result.Logs = logs
+
+	enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
+	if err != nil {
+		return err
+	}
+	chainID := DEFAULT_NET
+	net := uint64(chainID)
+	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		return  err
+	}
+	from := pub.GetAddress()
+	result.From = from.String()
 	result.To = string(rawTx.To)
 	result.TransactionHash = txHash
 	*reply = *result
@@ -213,7 +225,6 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 }
 
 func (s *ethService) EstimateGas(r *http.Request, _ *types.EthArgs, reply *string) error {
-	s.logger.Debug("EstimateGas called")
 	//gas := big.NewInt(2) // todo 如果有多个币种？
 	//*reply = fmt.Sprintf("0x%x", gas)
 	*reply = "0x0000000000000000000000000000000000000000000000000000000000000015"
@@ -255,10 +266,8 @@ func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) e
 	}
 	resp, err := s.xclient.Do(req)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
-	fmt.Println(resp.Tx.Txid)
 	return nil
 }
 func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *string) error {
@@ -279,7 +288,6 @@ func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *stri
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println(resp.Tx.Txid)
 	//data, err := x.DecodeToBytes(*tx)
 	//if err != nil {
 	//	return err
@@ -400,12 +408,10 @@ func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) err
 	}
 	addrStatus, err := s.xchainClient.GetBalance(context.TODO(), pbAddrStatus)
 	if err != nil {
-		s.logger.Error(err)
 		return fmt.Errorf("can not get Balance from ledger\n")
 	}
 	balance, ok := big.NewInt(0).SetString(addrStatus.Bcs[0].Balance, 10) // todo 如果有多个币种？
 	if !ok {
-		s.logger.Errorf("parse balance to Ox error\n")
 		return fmt.Errorf("Server Internal error\n")
 	}
 	*reply = fmt.Sprintf("0x%x", balance)
@@ -422,9 +428,7 @@ func (s *ethService) BlockNumber(r *http.Request, _ *interface{}, reply *string)
 }
 
 func (s *ethService) GetBlockByNumber(r *http.Request, p *[]interface{}, reply *types.Block) error {
-	s.logger.Debug("Received a request for GetBlockByNumber")
 	params := *p
-	s.logger.Debug("Params are : ", params)
 
 	numParams := len(params)
 	if numParams != 2 {
@@ -433,7 +437,6 @@ func (s *ethService) GetBlockByNumber(r *http.Request, p *[]interface{}, reply *
 	// first arg is string of block to get
 	number, ok := params[0].(string)
 	if !ok {
-		s.logger.Debugf("Incorrect argument received: %#v", params[0])
 		return fmt.Errorf("Incorrect first parameter sent, must be string")
 	}
 	if len(number) < 2 || number[:2] != "0x" {
@@ -461,13 +464,11 @@ func (s *ethService) GetBlockByNumber(r *http.Request, p *[]interface{}, reply *
 
 	block, err := s.xchainClient.GetBlockByHeight(context.TODO(), blockHeightPB)
 	if err != nil {
-		s.logger.Debug(err)
 		return fmt.Errorf("failed to query the ledger: %v", err)
 	}
 
 	blk, err := parseBlock(block, fullTransactions)
 	if err != nil {
-		s.logger.Debug(err)
 		return err
 	}
 
@@ -482,7 +483,6 @@ func (s *ethService) GetBlockByHash(r *http.Request, p *[]interface{}, reply *ty
 	}
 	blockHash, ok := params[0].(string)
 	if !ok {
-		s.logger.Debugf("Incorrect argument received: %#v", params[0])
 		return fmt.Errorf("Incorrect first parameter sent, must be string")
 	}
 	if len(blockHash) != blockHashLength {
@@ -495,7 +495,6 @@ func (s *ethService) GetBlockByHash(r *http.Request, p *[]interface{}, reply *ty
 	}
 	block, err := s.getBlockByHash(blockHash, fullTransactions)
 	if err != nil {
-		s.logger.Errorf("getBlockHash error: %#v", err.Error())
 		return err
 	}
 	*reply = *block
@@ -506,45 +505,86 @@ func (s *ethService) GetTransactionByHash(r *http.Request, txID *string, reply *
 	if len(*txID) != txHashLength {
 		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(*txID))
 	}
-	rawTxId, err := hex.DecodeString((*txID)[2:])
+	txHash := (*txID)[2:]
+	method := "GetTransactionReceipt"
+	args1 := make(map[string]string)
+	args1["tx_hash"] = txHash
+
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
-		s.logger.Error(err)
-		return fmt.Errorf("Invalid Transcation Hash\n")
+		return err
 	}
-	pbTxStatus := &pb.TxStatus{
-		Header: &pb.Header{
-			// Logid: global.Glogid(),
-		},
-		Bcname: bcName,
-		Txid:   rawTxId,
-	}
-	txStatus, err := s.xchainClient.QueryTx(context.TODO(), pbTxStatus)
+	resp, err := s.xclient.PreExecTx(req)
 	if err != nil {
-		s.logger.Error(err)
-		return fmt.Errorf("Get The Transaction Error\n")
-	}
-	if txStatus.Status == pb.TransactionStatus_NOEXIST {
-		return fmt.Errorf("The Transaction NOT EXIST\n")
+		return err
 	}
 
-	if txStatus.Status != pb.TransactionStatus_CONFIRM {
-		return fmt.Errorf("Get The Transaction Error\n")
-	}
-
-	tx, err := parseTransaction(txStatus.Tx)
+	signedTx := resp.ContractResponse.Body
+	data, err := encoding.DecodeToBytes(string(signedTx))
 	if err != nil {
-		s.logger.Error(err)
-		return fmt.Errorf("Can Not Parse The Transaction\n")
+		return err
 	}
 
-	block, err := s.getBlockByHash(tx.BlockHash, false)
+	rawTx := new(rpc.RawTx)
+	err = rlp.Decode(data, rawTx)
 	if err != nil {
-		s.logger.Error(err)
-		return fmt.Errorf("Get Block Number Error:%s\n", err.Error())
+		return err
 	}
 
-	tx.BlockNumber = block.Number
-	*reply = *tx
+	result := &types.Transaction{}
+	//	result.BlockHash = fmt.Sprintf("%x", receipt.TxStatus.Tx.Blockid)
+	//	result.BlockNumber = fmt.Sprintf("%d", receipt.BlockNumber)
+	//	//reply.ContractAddress
+	//	logs := parseEvmLog2TyepLogs(receipt.Log)
+	//	result.Logs = logs
+
+	enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
+	if err != nil {
+		return err
+	}
+	chainID := DEFAULT_NET
+	net := uint64(chainID)
+	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		return  err
+	}
+	from := pub.GetAddress()
+	result.From = from.String()
+	result.To = string(rawTx.To)
+	result.Hash = txHash
+	*reply = *result
+	//pbTxStatus := &pb.TxStatus{
+	//	Header: &pb.Header{
+	//		// Logid: global.Glogid(),
+	//	},
+	//	Bcname: bcName,
+	//	Txid:   rawTxId,
+	//}
+	//txStatus, err := s.xchainClient.QueryTx(context.TODO(), pbTxStatus)
+	//if err != nil {
+	//	return fmt.Errorf("Get The Transaction Error\n")
+	//}
+	//if txStatus.Status == pb.TransactionStatus_NOEXIST {
+	//	return fmt.Errorf("The Transaction NOT EXIST\n")
+	//}
+	//
+	//if txStatus.Status != pb.TransactionStatus_CONFIRM {
+	//	return fmt.Errorf("Get The Transaction Error\n")
+	//}
+	//
+	//tx, err := parseTransaction(txStatus.Tx)
+	//if err != nil {
+	//	return fmt.Errorf("Can Not Parse The Transaction\n")
+	//}
+	//
+	//block, err := s.getBlockByHash(tx.BlockHash, false)
+	//if err != nil {
+	//	return fmt.Errorf("Get Block Number Error:%s\n", err.Error())
+	//}
+	//
+	//tx.BlockNumber = block.Number
+	*reply = *result
 	return nil
 }
 
@@ -824,7 +864,6 @@ func (s *ethService) getBlockByHash(blockHash string, fullTransactions bool) (*t
 
 	block, err := parseBlock(b, fullTransactions)
 	if err != nil {
-		s.logger.Debug(err)
 		return nil, fmt.Errorf("Failed to Query The Block: %s\n", err.Error())
 	}
 	return block, nil
@@ -892,11 +931,8 @@ func (s *ethService) parseBlockNum(input string) (uint64, error) {
 		// latest
 		bcStatus, err := s.xchainClient.GetBlockChainStatus(context.TODO(), bcStatusPB)
 		if err != nil {
-			s.logger.Debug(err)
 			return 0, fmt.Errorf("failed to query the ledger: %v", err)
 		}
-		// height is the block being worked on now, we want the previous block
-		s.logger.Info(bcStatus.GetBlock().GetHeight())
 		topBlockNumber := uint64(bcStatus.GetBlock().GetHeight())
 		return topBlockNumber, nil
 	case "earliest":
@@ -942,7 +978,6 @@ func (s *ethService) GetCode(r *http.Request, arg *string, reply *string) error 
 }
 
 func parseTransaction(tx *pb.Transaction) (*types.Transaction, error) {
-	fmt.Printf("Tom Parse Transaction")
 	from := tx.Initiator
 	if tx.Coinbase {
 		from = coinBaseFrom
