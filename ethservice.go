@@ -50,8 +50,8 @@ const (
 
 var FilterMap = make(map[string]*types.Filter)
 var deadline = 5 * time.Minute
-const 	DEFAULT_NET   = 1
 
+const DEFAULT_NET = 1
 
 // EthService is the rpc server implementation. Each function is an
 // implementation of one ethereum json-rpc
@@ -112,7 +112,7 @@ func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClie
 	if err != nil {
 		return nil, errors.New("TODO")
 	}
-	fmt.Printf("Address:%v\n",account.Address)
+	fmt.Printf("Address:%v\n", account.Address)
 	contractAccount := "XC1234567890123456@xuper"
 	err = account.SetContractAccount(contractAccount)
 	if err != nil {
@@ -170,13 +170,13 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 
 func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error { //todo
 	txHash := *arg
-	if len(txHash) != txHashLength {
-		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
-	}
+	// if len(txHash) != txHashLength {
+	// 	return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
+	// }
 
 	method := "GetTransactionReceipt"
 	args1 := make(map[string]string)
-	args1["tx_hash"] = txHash[2:]
+	args1["tx_hash"] = txHash
 
 	//fmt.Printf("Account:%s\n",s.account.Address)
 	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
@@ -216,13 +216,13 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
 	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
 	if err != nil {
-		return  err
+		return err
 	}
 	from := pub.GetAddress()
 	result.From = from.String()
 	result.To = string(rawTx.To)
 	result.TransactionHash = txHash
-	*reply = *result
+	// *reply = *result
 	return nil
 }
 
@@ -270,7 +270,7 @@ func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) e
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n",resp.Tx.Txid)
+	fmt.Printf("%s\n", resp.Tx.Txid)
 	return nil
 }
 func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *string) error {
@@ -291,7 +291,14 @@ func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *stri
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println(hex.EncodeToString(resp.Tx.GetTxid()))
+	fmt.Println(hex.EncodeToString(resp.ContractResponse.Body))
+
+	// var txHash []byte
+	// if err = json.Unmarshal(resp.ContractResponse.Body, &txHash); err != nil {
+	// 	return err
+	// }
+	// fmt.Println(txHash)
+	// fmt.Println(hex.EncodeToString(resp.ContractResponse.Body))
 	//data, err := x.DecodeToBytes(*tx)
 	//if err != nil {
 	//	return err
@@ -551,13 +558,13 @@ func (s *ethService) GetTransactionByHash(r *http.Request, txID *string, reply *
 	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
 	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
 	if err != nil {
-		return  err
+		return err
 	}
 	from := pub.GetAddress()
 	result.From = from.String()
 	result.To = string(rawTx.To)
 	result.Hash = txHash
-	*reply = *result
+	// *reply = *result
 	//pbTxStatus := &pb.TxStatus{
 	//	Header: &pb.Header{
 	//		// Logid: global.Glogid(),
@@ -588,7 +595,7 @@ func (s *ethService) GetTransactionByHash(r *http.Request, txID *string, reply *
 	//}
 	//
 	//tx.BlockNumber = block.Number
-	*reply = *result
+	// *reply = *result
 	return nil
 }
 
