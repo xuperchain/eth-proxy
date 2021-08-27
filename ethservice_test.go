@@ -19,6 +19,16 @@ func TestSendRawTransaction(t *testing.T) {
 		}
 	})
 
+	t.Run("GetTransactionReceipt", func(t *testing.T) {
+		txHash := "0f756f59c8997a09c3efce102a6c1dfaf0459fd808d418d91853048a47cc00a8"
+		if err := service.GetTransactionReceipt(nil, &txHash, nil); err != nil {
+			t.Error(err)
+			return
+
+		}
+
+	})
+
 	t.Run("TestContractCall", func(t *testing.T) {
 		if err := service.Call(nil, nil, nil); err != nil {
 			t.Error(err)
