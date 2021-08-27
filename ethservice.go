@@ -112,6 +112,7 @@ func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClie
 	if err != nil {
 		return nil, errors.New("TODO")
 	}
+	fmt.Printf("Address:%v\n",account.Address)
 	contractAccount := "XC1234567890123456@xuper"
 	err = account.SetContractAccount(contractAccount)
 	if err != nil {
@@ -177,6 +178,7 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	args1 := make(map[string]string)
 	args1["tx_hash"] = txHash[2:]
 
+	//fmt.Printf("Account:%s\n",s.account.Address)
 	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
@@ -268,6 +270,7 @@ func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) e
 	if err != nil {
 		return err
 	}
+	fmt.Printf("%s\n",resp.Tx.Txid)
 	return nil
 }
 func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *string) error {
@@ -288,6 +291,7 @@ func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *stri
 		fmt.Println(err)
 		return err
 	}
+	fmt.Println(hex.EncodeToString(resp.Tx.GetTxid()))
 	//data, err := x.DecodeToBytes(*tx)
 	//if err != nil {
 	//	return err
