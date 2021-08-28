@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 
-
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
@@ -43,7 +42,9 @@ func NewEthereumProxy(service EthService, port int) *EthereumProxy {
 	allowedOrigins := handlers.AllowedOrigins([]string{"*"})
 	allowedMethods := handlers.AllowedMethods([]string{"POST"})
 
-	proxy.HTTPServer = &http.Server{Handler: handlers.CORS(allowedHeaders, allowedOrigins, allowedMethods)(r), Addr: fmt.Sprintf(":%d", port)}
+	proxy.HTTPServer = &http.Server{
+		Handler: handlers.CORS(allowedHeaders, allowedOrigins, allowedMethods)(r),
+		Addr:    fmt.Sprintf(":%d", port)}
 	return proxy
 }
 

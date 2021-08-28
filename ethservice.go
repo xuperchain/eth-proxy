@@ -12,6 +12,7 @@ import (
 	"io"
 	mathRand "math/rand"
 	"strings"
+
 	"time"
 
 	"math/big"
@@ -61,9 +62,10 @@ var deadline = 5 * time.Minute
 //
 type EthService interface {
 	GetCode(r *http.Request, arg *string, reply *string) error
-	//Call(r *http.Request, args *types.EthArgs, reply *string) error
+	Call(r *http.Request, args *types.EthArgs, reply *string) error
 	SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error
-	//GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error
+
+	GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error
 	//Accounts(r *http.Request, arg *string, reply *[]string) error
 	EstimateGas(r *http.Request, args *types.EthArgs, reply *string) error
 	GetBalance(r *http.Request, p *[]string, reply *string) error
@@ -71,31 +73,54 @@ type EthService interface {
 	GetBlockByHash(r *http.Request, p *[]interface{}, reply *types.Block) error
 	BlockNumber(r *http.Request, _ *interface{}, reply *string) error
 	GetTransactionByHash(r *http.Request, txID *string, reply *types.Transaction) error
-	//GetTransactionCount(r *http.Request, _ *interface{}, reply *string) error
+	GetTransactionCount(r *http.Request, _ *interface{}, reply *string) error
 	GetLogs(*http.Request, *types.GetLogsArgs, *[]types.Log) error
 	NewFilter(*http.Request, *types.GetLogsArgs, *string) error
 	GetFilterLogs(*http.Request, *string, *[]types.Log) error
 	UninstallFilter(*http.Request, *string, *bool) error
 	GetFilter(*http.Request, *string, *types.Filter) error
+	GasPrice(*http.Request, *string, *string) error
+	SendRawTransaction(*http.Request, *string, *string) error
 }
 
 type ethService struct {
 	xchainClient pb.XchainClient
-	eventClient  pb.EventServiceClient
+	//client  xuper-sdk-go client
+	xclient     *xuper.XClient
+	eventClient pb.EventServiceClient
 	//filterClient  pb.EvmFilterClient
 	logger        *zap.SugaredLogger
 	filterMapLock sync.Mutex
 	filterMap     map[uint64]interface{}
 	filterSeq     uint64
+	account       *account.Account
 }
 
-func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) EthService {
+func NewEthService1() (EthService, error) {
+	return NewEthService(nil, nil, nil)
+}
+func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) (EthService, error) {
+	client, err := xuper.New("127.0.0.1:37101")
+	if err != nil {
+		panic("new xuper Client error:")
+	}
+	account, err := account.RetrieveAccount("玉 脸 驱 协 介 跨 尔 籍 杆 伏 愈 即", 1)
+	if err != nil {
+		return nil, errors.New("TODO")
+	}
+	contractAccount := "XC1234567890123456@xuper"
+	err = account.SetContractAccount(contractAccount)
+	if err != nil {
+		return nil, err
+	}
 	return &ethService{
 		xchainClient: xchainClient,
 		eventClient:  eventClient,
-		logger:       logger.Named("ethservice"),
-		filterMap:    make(map[uint64]interface{}),
-	}
+		//logger:       logger.Named("ethservice"),
+		filterMap: make(map[uint64]interface{}),
+		xclient:   client,
+		account:   account,
+	}, nil
 }
 
 //func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) error {
@@ -110,98 +135,230 @@ func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClie
 //
 //	return nil
 //}
-
 func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error {
 	*reply = "0x0111111"
-	//fmt.Printf("%v\n", args)
-	client, err := xuper.New("127.0.0.1:37101")
-	if err != nil {
-		panic("new xuper Client error:")
-	}
-	//fmt.Println(args.Data)
-	account, err := account.RetrieveAccount("玉 脸 驱 协 介 跨 尔 籍 杆 伏 愈 即", 1)
-	if err != nil {
-		fmt.Printf("retrieveAccount err: %v\n", err)
-		//TODO
-		return errors.New("TODO")
-	}
-	fmt.Printf("retrieveAccount address: %v\n", account.Address)
-	contractAccount := "XC1234567890123456@xuper"
-	err = account.SetContractAccount(contractAccount)
-	//TODO
-	method := "proxy"
+
+	method := "SendTransaction"
 	args1 := map[string]string{
 		"from":      args.From,
 		"to":        args.To,
 		"gas":       args.Gas,
 		"gas_price": args.GasPrice,
 		"nonce":     args.Nonce,
-		"data":      args.Data,
+		"input":     args.Input,
 		"value":     args.Value,
 	}
-	req, err := xuper.NewInvokeContractRequest(account, xuper.Xkernel3Module, "$contract", method, args1)
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Do(req)
+	resp, err := s.xclient.Do(req)
 	if err != nil {
 		return err
 	}
 	if resp.ContractResponse.Status > 400 {
-		//TODO
 		return errors.New("TODO1")
 	}
 	return nil
 }
 
-//func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error { //todo
-//	txHash := *arg
-//	if len(txHash) != txHashLength {
-//		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
-//	}
-//	rawTxId, err := hex.DecodeString(txHash[2:])
-//	if err != nil {
-//		s.logger.Error(err)
-//		return fmt.Errorf("invalid transcation hash")
-//	}
-//	pbTxStatus := &pb.TxStatus{
-//		Header: &pb.Header{
-//			Logid: global.Glogid(),
-//		},
-//		Bcname: bcName,
-//		Txid:   rawTxId,
-//	}
-//	receipt, err := s.xchainClient.GetTransactionReceipt(context.TODO(), pbTxStatus)
-//	if err != nil {
-//		s.logger.Error(err)
-//		return fmt.Errorf("get transactionReceipt error")
-//	}
-//	if receipt.TxStatus.Status == pb.TransactionStatus_NOEXIST {
-//		return fmt.Errorf("Transaction Not Exit\n")
-//	}
-//	if receipt.TxStatus.Status != pb.TransactionStatus_CONFIRM {
-//		return fmt.Errorf("Get TransactionReceipt Err\n")
-//	}
-//	result := &types.TxReceipt{}
-//	result.TransactionHash = fmt.Sprintf("%x", receipt.TxStatus.Txid)
-//	result.BlockHash = fmt.Sprintf("%x", receipt.TxStatus.Tx.Blockid)
-//	result.BlockNumber = fmt.Sprintf("%d", receipt.BlockNumber)
-//	//reply.ContractAddress
-//	logs := parseEvmLog2TyepLogs(receipt.Log)
-//	result.Logs = logs
-//	result.From = receipt.TxStatus.Tx.Initiator
-//	//reply.To
-//	*reply = *result
-//	return nil
-//}
+func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error { //todo
+	_ = 0
+	//	txHash := *arg
+	//	if len(txHash) != txHashLength {
+	//		return fmt.Errorf("invalid transaction hash,expect length:%d, but got:%d", txHashLength, len(txHash))
+	//	}
+	//	rawTxId, err := hex.DecodeString(txHash[2:])
+	//	if err != nil {
+	//		s.logger.Error(err)
+	//		return fmt.Errorf("invalid transcation hash")
+	//	}
+	//	pbTxStatus := &pb.TxStatus{
+	//		Header: &pb.Header{
+	//			Logid: global.Glogid(),
+	//		},
+	//		Bcname: bcName,
+	//		Txid:   rawTxId,
+	//	}
+	//	receipt, err := s.xchainClient.GetTransactionReceipt(context.TODO(), pbTxStatus)
+	//	if err != nil {
+	//		s.logger.Error(err)
+	//		return fmt.Errorf("get transactionReceipt error")
+	//	}
+	//	if receipt.TxStatus.Status == pb.TransactionStatus_NOEXIST {
+	//		return fmt.Errorf("Transaction Not Exit\n")
+	//	}
+	//	if receipt.TxStatus.Status != pb.TransactionStatus_CONFIRM {
+	//		return fmt.Errorf("Get TransactionReceipt Err\n")
+	//	}
+	//	result := &types.TxReceipt{}
+	//	result.TransactionHash = fmt.Sprintf("%x", receipt.TxStatus.Txid)
+	//	result.BlockHash = fmt.Sprintf("%x", receipt.TxStatus.Tx.Blockid)
+	//	result.BlockNumber = fmt.Sprintf("%d", receipt.BlockNumber)
+	//	//reply.ContractAddress
+	//	logs := parseEvmLog2TyepLogs(receipt.Log)
+	//	result.Logs = logs
+	//	result.From = receipt.TxStatus.Tx.Initiator
+	//	//reply.To
+	//	*reply = *result
+	return nil
+}
 
 func (s *ethService) EstimateGas(r *http.Request, _ *types.EthArgs, reply *string) error {
 	s.logger.Debug("EstimateGas called")
-	*reply = "0x0"
+	//gas := big.NewInt(2) // todo 如果有多个币种？
+	//*reply = fmt.Sprintf("0x%x", gas)
+	*reply = "0x0000000000000000000000000000000000000000000000000000000000000015"
+	return nil
+}
+
+func (s *ethService) GetTransactionCount(r *http.Request, _ *interface{}, reply *string) error {
+	*reply = "0x01"
+	return nil
+}
+
+type logger struct {
+}
+
+//func (l *logger) Log(keyvals ...interface{}) error {
+//fmt.Println(keyvals)
+//return nil
+//}
+func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) error {
+	//l := logging.NewLogger(&logger{})
+	//packed, _, err := abi.EncodeFunctionCall(string(rpc.Abi_HelloWorld), "Hello", l)
+	//if err != nil {
+	//	return err
+	//}
+	to := "313131312D2D2D2D2D2D2D2D2D636F756E746572"
+	from := "b60e8dd61c5d32be8058bb8eb970870f07233155"
+	input := "ae896c870000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000678636861696e0000000000000000000000000000000000000000000000000000"
+	method := "ContractCall"
+	args1 := map[string]string{
+		"from":  from,
+		"to":    to,
+		"input": input,
+		//"gas":gas,
+		//"gas_price":gasPrice
+	}
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
+	if err != nil {
+		return err
+	}
+	resp, err := s.xclient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(resp.Tx.Txid)
+	return nil
+}
+func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *string) error {
+	//*reply = "0x01"
+	method := "SendRawTransaction"
+	args := map[string]string{
+		"signed_tx": *tx,
+	}
+	//args := map[string]string{
+	//	"signed_tx": "",
+	//}
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args)
+	if err != nil {
+		return err
+	}
+	resp, err := s.xclient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(resp.Tx.Txid)
+	//data, err := x.DecodeToBytes(*tx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//rawTx := new(rpc.RawTx)
+	//err = rlp.Decode(data, rawTx)
+	//if err != nil {
+	//	return err
+	//}
+
+	//net := uint64(chainID)
+	//enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
+	//pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//from := pub.GetAddress()
+	//unc := crypto.UncompressedSignatureFromParams(rawTx.R, rawTx.S)
+	//signature, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//to, err := crypto.AddressFromBytes(rawTx.To)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//amount := balance.WeiToNative(rawTx.Value).Uint64()
+	//
+	//txEnv := &txs.Envelope{
+	//	Signatories: []txs.Signatory{
+	//		{
+	//			Address:   &from,
+	//			PublicKey: pub,
+	//			Signature: signature,
+	//		},
+	//	},
+	//	Encoding: txs.Envelope_RLP,
+	//	Tx: &txs.Tx{
+	//		ChainID: srv.blockchain.ChainID(),
+	//		Payload: &payload.CallTx{
+	//			Input: &payload.TxInput{
+	//				Address: from,
+	//				Amount:  amount,
+	//				// first tx sequence should be 1,
+	//				// but metamask starts at 0
+	//				Sequence: rawTx.Nonce + 1,
+	//			},
+	//			Address:  &to,
+	//			GasLimit: rawTx.GasLimit,
+	//			GasPrice: rawTx.GasPrice,
+	//			Data:     rawTx.Data,
+	//		},
+	//	},
+	//}
+	//
+	//ctx := context.Background()
+	//txe, err := srv.trans.BroadcastTxSync(ctx, txEnv)
+	//if err != nil {
+	//	return nil, err
+	//} else if txe.Exception != nil {
+	//	return nil, txe.Exception.AsError()
+	//}
+	//
+	//return &web3.EthSendRawTransactionResult{
+	//	TransactionHash: x.EncodeBytes(txe.GetTxHash().Bytes()),
+	//}, nil
+
 	return nil
 }
 
 func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) error {
+	balance := big.NewInt(999999999) // todo 如果有多个币种？
+	//if !ok {
+	//	s.logger.Errorf("parse balance to Ox error\n")
+	//	return fmt.Errorf("Server Internal error\n")
+	//}
+	*reply = fmt.Sprintf("0x%x", balance)
+	return nil
+
 	params := *p
 	if len(params) != 2 {
 		return fmt.Errorf("need 2 params, got %q", len(params))
@@ -742,6 +899,10 @@ func (s *ethService) parseBlockNum(input string) (uint64, error) {
 		return strconv.ParseUint(input, 16, 64)
 	}
 }
+func (s *ethService) GasPrice(r *http.Request, arg *string, reply *string) error {
+	*reply = "0"
+	return nil
+}
 
 func (s *ethService) GetCode(r *http.Request, arg *string, reply *string) error {
 	if len(*arg) != contracrLength {
@@ -753,6 +914,7 @@ func (s *ethService) GetCode(r *http.Request, arg *string, reply *string) error 
 		return err
 	}
 	_ = name
+	*reply = "0x600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056"
 
 	//pbContractParams := &pb.ContractParams{
 	//	Header: &pb.Header{

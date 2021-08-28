@@ -47,13 +47,16 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Failed to create xchainClient: %s\n", err)
 	}
 
-	rawLogger, err := zap.NewProduction()
+	rawLogger, err := zap.NewDevelopment()
 	if err != nil {
 		return fmt.Errorf("Failed to create logger: %s\n", err)
 	}
 	logger := rawLogger.Named("proxy").Sugar()
 
-	ethService := xuperproxy.NewEthService(xchainClient, eventClient, logger)
+	ethService, err := xuperproxy.NewEthService(xchainClient, eventClient, logger)
+	if err != nil {
+		return err
+	}
 
 	proxy := xuperproxy.NewEthereumProxy(ethService, port)
 
@@ -68,6 +71,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 
 	select {
 	case err = <-errChan:
+		fmt.Println(err)
 		// TODO add error check
 	case <-signalChan:
 		logger.Info("Received termination signal")
@@ -92,7 +96,7 @@ func main() {
 
 			// At this point all of our flags have been validated
 			// Usage no longer needs to be provided for the errors that follow
-			cmd.SilenceUsage = true
+			cmd.SilenceUsage = false
 			return runProxy(cmd, args)
 		},
 	}
@@ -113,7 +117,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
 
 func initXchainClient(host string) (pb.XchainClient, pb.EventServiceClient, error) {
 	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithMaxMsgSize(64<<20-1))

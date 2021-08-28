@@ -35,6 +35,7 @@ type EthArgs struct {
 	GasPrice string `json:"gasPrice"`
 	Value    string `json:"value"`
 	Data     string `json:"data"`
+	Input    string `json:"input"`
 	Nonce    string `json:"nonce"`
 }
 
