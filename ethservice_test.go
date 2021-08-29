@@ -3,7 +3,7 @@ package xuperproxy
 import "testing"
 
 func TestSendRawTransaction(t *testing.T) {
-	service, err := NewEthService1()
+	service, err := NewEthService(nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -24,15 +24,23 @@ func TestSendRawTransaction(t *testing.T) {
 		if err := service.GetTransactionReceipt(nil, &txHash, nil); err != nil {
 			t.Error(err)
 			return
-
 		}
 
 	})
 
-	t.Run("TestContractCall", func(t *testing.T) {
-		if err := service.Call(nil, nil, nil); err != nil {
+	t.Run("GetBalance", func(t *testing.T) {
+		address := "0xf97798df751deb4b6e39d4cf998ee7cd4dcb9acc"
+		var reply string
+		if err := service.GetBalance(nil, &[]string{address, "latest"}, &reply); err != nil {
 			t.Error(err)
 			return
 		}
 	})
+
+	// t.Run("TestContractCall", func(t *testing.T) {
+	// 	if err := service.Call(nil, nil, nil); err != nil {
+	// 		t.Error(err)
+	// 		return
+	// 	}
+	// })
 }

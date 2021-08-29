@@ -15,8 +15,7 @@ require (
 	github.com/xuperchain/xuperchain v0.0.0-20210720132849-0079bcda5e54
 	github.com/xuperchain/xupercore v0.0.0-20210720112551-29ed46a49f02
 	go.uber.org/zap v1.16.0
-	golang.org/x/tools v0.0.0-20210106214847-113979e3529a // indirect
 	google.golang.org/grpc v1.36.0
 )
 
-replace github.com/xuperchain/xupercore =>  ../xupercore
+replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20210806065218-1c6d40be4365

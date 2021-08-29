@@ -37,6 +37,9 @@ type EthArgs struct {
 	Data     string `json:"data"`
 	Input    string `json:"input"`
 	Nonce    string `json:"nonce"`
+	R        string `json:"r"`
+	S        string `json:"s"`
+	Hash     string `json:"hash"`
 }
 
 type GetLogsArgs struct {

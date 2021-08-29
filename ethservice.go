@@ -100,10 +100,7 @@ type ethService struct {
 	account       *account.Account
 }
 
-func NewEthService1() (EthService, error) {
-	return NewEthService(nil, nil, nil)
-}
-func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) (EthService, error) {
+func NewEthService(xchainClient pb.XchainClient, eventClient pb.EventServiceClient, logger *zap.SugaredLogger) (*ethService, error) {
 	client, err := xuper.New("127.0.0.1:37101")
 	if err != nil {
 		panic("new xuper Client error:")
@@ -152,6 +149,10 @@ func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply
 		"nonce":     args.Nonce,
 		"input":     args.Input,
 		"value":     args.Value,
+		"r":         args.R,
+		"s":         args.S,
+		"hash":      args.Hash,
+		//"param":
 	}
 
 	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
@@ -378,14 +379,6 @@ func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *stri
 }
 
 func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) error {
-	balance := big.NewInt(999999999) // todo 如果有多个币种？
-	//if !ok {
-	//	s.logger.Errorf("parse balance to Ox error\n")
-	//	return fmt.Errorf("Server Internal error\n")
-	//}
-	*reply = fmt.Sprintf("0x%x", balance)
-	return nil
-
 	params := *p
 	if len(params) != 2 {
 		return fmt.Errorf("need 2 params, got %q", len(params))
@@ -401,32 +394,27 @@ func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) err
 		return fmt.Errorf("only the latest is supported now")
 	}
 
-	evmAddr, err := crypto.AddressFromHexString(params[0][2:])
-	if err != nil {
-		return fmt.Errorf("can not transfer the address:%s to xuperChain account", params[0])
-	}
+	address := params[0][2:]
 
-	addr, _, err := evm.DetermineEVMAddress(evmAddr)
+	method := "BalanceOf"
+	args := map[string]string{
+		"address": address,
+	}
+	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args)
 	if err != nil {
-		return fmt.Errorf("can not transfer the address:%s to xuperChain account", params[0])
+		return err
 	}
-
-	pbAddrStatus := &pb.AddressStatus{
-		Address: addr,
-		Bcs: []*pb.TokenDetail{
-			{Bcname: bcName},
-		},
-	}
-	addrStatus, err := s.xchainClient.GetBalance(context.TODO(), pbAddrStatus)
+	resp, err := s.xclient.Do(req)
 	if err != nil {
-		return fmt.Errorf("can not get Balance from ledger\n")
+		return err
 	}
-	balance, ok := big.NewInt(0).SetString(addrStatus.Bcs[0].Balance, 10) // todo 如果有多个币种？
+	balance, ok := new(big.Int).SetString(string(resp.ContractResponse.Body), 10)
 	if !ok {
-		return fmt.Errorf("Server Internal error\n")
+		return errors.New("get balance failed")
 	}
-	*reply = fmt.Sprintf("0x%x", balance)
+	*reply = balance.Text(16)
 	return nil
+
 }
 
 func (s *ethService) BlockNumber(r *http.Request, _ *interface{}, reply *string) error {
