@@ -22,7 +22,9 @@ var serializedTx = tx.serialize();
 // 0xf889808609184e72a00082271094000000000000000000000000000000000000000080a47f74657374320000000000000000000000000000000000000000000000000000006000571ca08a8bbf888cfa37bbf0bb965423625641fc956967b81d12e23709cead01446075a01ce999b56a8a88504be365442ea61239198e23d1fce7d00fcfc5cd3b44b7215f
 
 web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'))
-    .on('receipt', console.log);
+//     .on('receipt', console.log);
 
 
-// 合约调用
+// GetBalance
+account = "0x77A8B3C01ab8e408371a5583194D14236858b9c3"
+web3.eth.getBalance(account).then(console.log)

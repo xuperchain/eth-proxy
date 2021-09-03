@@ -30,7 +30,7 @@ func TestSendRawTransaction(t *testing.T) {
 	})
 
 	t.Run("GetBalance", func(t *testing.T) {
-		address := "0xf97798df751deb4b6e39d4cf998ee7cd4dcb9acc"
+		address := "0x77A8B3C01ab8e408371a5583194D14236858b9c3"
 		var reply string
 		if err := service.GetBalance(nil, &[]string{address, "latest"}, &reply); err != nil {
 			t.Error(err)

@@ -73,7 +73,7 @@ type EthService interface {
 	SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error
 
 	GetTransactionReceipt(r *http.Request, arg *string, reply *types.TxReceipt) error
-	//Accounts(r *http.Request, arg *string, reply *[]string) error
+	Accounts(r *http.Request, arg *string, reply *[]string) error
 	EstimateGas(r *http.Request, args *types.EthArgs, reply *string) error
 	GetBalance(r *http.Request, p *[]string, reply *string) error
 	GetBlockByNumber(r *http.Request, p *[]interface{}, reply *types.Block) error
@@ -138,19 +138,6 @@ func NewEthService(config *EthServiceConfig) (*ethService, error) {
 		account:   account,
 	}, nil
 }
-
-//func (s *ethService) Call(r *http.Request, args *types.EthArgs, reply *string) error {
-//	response, err := s.query(s.ccid, strip0x(args.To), [][]byte{[]byte(strip0x(args.Data))})
-//
-//	if err != nil {
-//		return fmt.Errorf("Failed to query the ledger: %s", err)
-//	}
-//
-//	// Clients expect the prefix to present in responses
-//	*reply = "0x" + hex.EncodeToString(response.Payload)
-//
-//	return nil
-//}
 func (s *ethService) SendTransaction(r *http.Request, args *types.EthArgs, reply *string) error {
 	// *reply = "0x0111111"
 	//
@@ -192,7 +179,6 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	args1 := make(map[string]string)
 	args1["tx_hash"] = txHash
 
-	//fmt.Printf("Account:%s\n",s.account.Address)
 	req, err := xuper.NewInvokeContractRequest(s.account, xuper.Xkernel3Module, "$evm", method, args1)
 	if err != nil {
 		return err
@@ -236,13 +222,17 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, arg *string, reply *
 	result.From = from.String()
 	result.To = string(rawTx.To)
 	result.TransactionHash = txHash
-	// *reply = *result
+	*reply = *result
 	return nil
 }
 
 // EstimateGas always return 0
 func (s *ethService) EstimateGas(r *http.Request, _ *types.EthArgs, reply *string) error {
-	*reply = "0x0"
+	*reply = "0x01"
+	return nil
+}
+func (s *ethService) Accounts(r *http.Request, arg *string, reply *[]string) error {
+	*reply = []string{"0x77A8B3C01ab8e408371a5583194D14236858b9c3"}
 	return nil
 }
 
@@ -308,6 +298,7 @@ func (s *ethService) SendRawTransaction(r *http.Request, tx *string, reply *stri
 	}
 	resp, err := s.xclient.Do(req)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
@@ -320,16 +311,15 @@ func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) err
 	if len(params) != 2 {
 		return fmt.Errorf("need 2 params, got %q", len(params))
 	}
-
-	switch params[1] {
-	case "latest":
-	case "earliest":
-		return fmt.Errorf("earliest status query balance is not supported at present")
-	case "pending":
-		return fmt.Errorf("pending status query balance is not supported at present")
-	default:
-		return fmt.Errorf("only the latest is supported now")
-	}
+	// switch params[1] {
+	// case "latest":
+	// case "earliest":
+	// 	return fmt.Errorf("earliest status query balance is not supported at present")
+	// case "pending":
+	// 	return fmt.Errorf("pending status query balance is not supported at present")
+	// default:
+	// 	return fmt.Errorf("only the latest is supported now")
+	// }
 
 	address := params[0][2:]
 
@@ -343,13 +333,15 @@ func (s *ethService) GetBalance(r *http.Request, p *[]string, reply *string) err
 	}
 	resp, err := s.xclient.PreExecTx(req)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 	balance, ok := new(big.Int).SetString(string(resp.ContractResponse.Body), 10)
 	if !ok {
 		return errors.New("get balance failed")
 	}
-	*reply = balance.Text(16)
+	*reply = "0x" + balance.Text(16)
+	fmt.Println("balance:", *reply)
 	return nil
 
 }
@@ -880,7 +872,7 @@ func (s *ethService) parseBlockNum(input string) (uint64, error) {
 	}
 }
 func (s *ethService) GasPrice(r *http.Request, arg *string, reply *string) error {
-	*reply = "0"
+	*reply = "0x01"
 	return nil
 }
 
@@ -893,22 +885,21 @@ func (s *ethService) GetCode(r *http.Request, arg *string, reply *string) error 
 	if err != nil {
 		return err
 	}
-	_ = name
-	*reply = "0x600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056"
 
-	//pbContractParams := &pb.ContractParams{
-	//	Header: &pb.Header{
-	//		Logid: global.Glogid(),
-	//	},
-	//	Bcname: "xuper",
-	//	Name:   name,
-	//}
-	//contractParams, err := s.xchainClient.GetContractParams(context.TODO(), pbContractParams)
-	//if err != nil {
-	//	s.logger.Error(err)
-	//	return fmt.Errorf("Can Not Get the Code\n")
-	//}
-	//*reply = string(contractParams.Code)
+	_ = name
+	// pbContractParams := &pb.ContractParams{
+	// 	Header: &pb.Header{
+	// 		Logid: global.Glogid(),
+	// 	},
+	// 	Bcname: "xuper",
+	// 	Name:   name,
+	// }
+	// contractParams, err := s.xchainClient.GetContractParams(context.TODO(), pbContractParams)
+	// if err != nil {
+	// 	s.logger.Error(err)
+	// 	return fmt.Errorf("Can Not Get the Code\n")
+	// }
+	// *reply = string(contractParams.Code)
 	return nil
 
 }
