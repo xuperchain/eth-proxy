@@ -1,4 +1,4 @@
-package xuperproxy
+package eth_proxy
 
 import (
 	"bytes"
@@ -15,13 +15,11 @@ func TestProxy(t *testing.T) {
 	data := struct {
 		JSONRPC string
 		Method  string
-		Params  Params
+		Params  string
 	}{
 		JSONRPC: "2.0",
-		Method:  "eth_sendTransaction",
-		Params: Params{
-			Data: "0xa46a766ce422e1e1a9827efe6989eeacc82a2352765287fe557497465751d9ab",
-		},
+		Method:  "eth_sendRawTransaction",
+		Params:  "0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422",
 	}
 	datas, err := json.Marshal(data)
 	if err != nil {

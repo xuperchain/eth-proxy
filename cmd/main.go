@@ -12,14 +12,15 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xuperchain/xuperchain/service/pb"
-	"github.com/xuperchain/xuperproxy"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
+
+	"github.com/xuperchain/eth_proxy"
 )
 
 var host string
 var port int
+var account string
+var keyPath string
 
 // InitFlags sets up the flags and environment variables for Proxy
 //func initFlags() {
@@ -42,23 +43,22 @@ var port int
 // Will exit gracefully for errors and signal interrupts
 func runProxy(cmd *cobra.Command, args []string) error {
 
-	xchainClient, eventClient, err := initXchainClient(host)
-	if err != nil {
-		return fmt.Errorf("Failed to create xchainClient: %s\n", err)
-	}
-
 	rawLogger, err := zap.NewDevelopment()
 	if err != nil {
 		return fmt.Errorf("Failed to create logger: %s\n", err)
 	}
 	logger := rawLogger.Named("proxy").Sugar()
 
-	ethService, err := xuperproxy.NewEthService(xchainClient, eventClient, logger)
+	ethService, err := eth_proxy.NewEthService(&eth_proxy.EthServiceConfig{
+		Host:            host,
+		ContractAccount: account,
+		KeyPath:         keyPath,
+	})
 	if err != nil {
 		return err
 	}
 
-	proxy := xuperproxy.NewEthereumProxy(ethService, port)
+	proxy := eth_proxy.NewEthereumProxy(ethService, port)
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -90,7 +90,7 @@ func main() {
 	var proxyCmd = &cobra.Command{
 		Use:   "proxy",
 		Short: "proxy is a web3 provider used to interact with the EVM chaincode on a XuperChain Network. The flags provided will be honored over the corresponding environment variables.",
-		Long:  "proxy is a web3 provider used to interact with the EVM chaincode on a Fabric Network. The flags provided will be honored over the corresponding environment variables.",
+		Long:  "proxy is a web3 provider used to interact with the EVM chaincode on a XuperChain Network. The flags provided will be honored over the corresponding environment variables.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -103,26 +103,23 @@ func main() {
 	viper.SetEnvPrefix("PROXY")
 	viper.BindEnv("host")
 	viper.BindEnv("port")
+	viper.BindEnv("account")
 
 	proxyCmd.PersistentFlags().StringVarP(&host, "host", "t", "127.0.0.1:37101",
 		"Path to a compatible Fabric SDK Go config file. This flag is required if PROXY_HOST is not set.")
 	viper.BindPFlag("config", proxyCmd.PersistentFlags().Lookup("host"))
 
-	//Port defaults to 5000 if PORT is not set or `-p,-port` is not provided
 	proxyCmd.PersistentFlags().IntVarP(&port, "port", "p", 8545,
 		"Port that Proxy will be running on. The listening port can also be set by the PROXY_PORT environment variable.")
 	viper.BindPFlag("port", proxyCmd.PersistentFlags().Lookup("port"))
-	fmt.Printf("listen at %d\n", port)
+
+	proxyCmd.PersistentFlags().StringVar(&account, "account", "XC1234567890123456@xuper", "account to send transaction")
+	viper.BindPFlag("account", proxyCmd.PersistentFlags().Lookup("account"))
+
+	proxyCmd.PersistentFlags().StringVar(&keyPath, "key", "data/keys", "key path")
+	viper.BindPFlag("key", proxyCmd.PersistentFlags().Lookup("key"))
+
 	if proxyCmd.Execute() != nil {
 		os.Exit(1)
 	}
-}
-
-func initXchainClient(host string) (pb.XchainClient, pb.EventServiceClient, error) {
-	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithMaxMsgSize(64<<20-1))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return pb.NewXchainClient(conn), pb.NewEventServiceClient(conn), nil
 }

@@ -2,7 +2,7 @@
  * Copyright (c) 2021. Baidu Inc. All Rights Reserved.
  */
 
-package xuperproxy
+package eth_proxy
 
 import (
 	"fmt"
@@ -43,7 +43,9 @@ func (r *rpcCodecRequest) Method() (string, error) {
 	if len(method) > 2 {
 		return "", fmt.Errorf("Received a malformed method: %s", method)
 	}
-
+	if method[1] != "version" && method[1] != "accounts" && method[1] != "getBalance" {
+		fmt.Println(method)
+	}
 	modifiedMethod := fmt.Sprintf("%s.%s", method[0], strings.Title(method[1]))
 	return modifiedMethod, nil
 }
